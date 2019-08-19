@@ -818,19 +818,10 @@ void begin_recordsound()
   }
 }
 
-
-
-//下载wav并播放
-baidu_speak(tulin_txt);
-
-
-
 //输入：文字
 //处理：百度服务文字转语音，并播放
 void baidu_speak(String voice_txt)
 {
-
-
 
   Serial.println("baidu_speak:" + voice_txt + " len=" + String(voice_txt.length()) );
   //控制字数，防止生成wav过大: 50字以内, 1个汉字占3字节长度
