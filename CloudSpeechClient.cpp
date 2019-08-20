@@ -764,7 +764,7 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
   }
 
   #ifdef SHOW_DEBUG
-    Serial.println("mp3 下载开始");
+    Serial.println("声音文件下载开始：" +String(textfile));
 #endif
   starttime = millis() / 1000;
   //返回内容小时一般不会出错，数据一多就要控制好！
@@ -775,7 +775,7 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
     if (stoptime - starttime >= 5)
     {
 #ifdef SHOW_DEBUG
-      Serial.println("savemp3 time out >5s");
+      Serial.println("savefile time out >5s");
 #endif
       retbol = false;
       break;
@@ -795,7 +795,7 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
   }
 
 #ifdef SHOW_DEBUG
-  Serial.println("mp3 下载完成");
+  Serial.println("声音文件下载完成："+String(textfile));
 #endif
 
   file.close();
@@ -952,10 +952,10 @@ String CloudSpeechClient::getVoice(String audio_text)
   String url = "http://tsn.baidu.com/text2audio";
   //示例:
   //tex=%E4%BD%A0%E5%A5%BD%E5%8C%97%E4%BA%AC%E9%82%AE%E7%94%B5%E5%A4%A7%E5%AD%A6%21&lan=zh&tok=24.5ba107afc08c6833511d17ceac4ff424.2592000.1548770176.282335-9406754&ctp=1&cuid=test_python";
-  //# aue:
+  //aue参数:
   //   3 mp3  4pcm-16k；5pcm-8k；6为wav 16k16位带文件头 pcm不带wav头  >>经测试，4，5音效不好
   // mp3的声音最后一字播放有问题！
-  String body = "tex=" + audio_text + "&lan=zh&tok=" + baidu_Token + "&ctp=1&aue=3&cuid=test_python1";
+  String body = "tex=" + audio_text + "&lan=zh&tok=" + baidu_Token + "&ctp=1&aue=6&cuid=test_python1";
 
   String  HttpHeader = "POST " + String(url) + " HTTP/1.1\r\n" +
                        "Host: tsn.baidu.com\r\n" +

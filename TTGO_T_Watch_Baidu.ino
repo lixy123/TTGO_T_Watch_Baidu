@@ -790,9 +790,6 @@ void begin_recordsound()
 #ifdef SHOW_DEBUG
     Serial.println("无用声音信号...");
 #endif
-
-    //String res = cloudSpeechClient->sound_berry(last_voice);
-    //Serial.println("sound_berry:" + res);
     return;
   }
   else
@@ -840,7 +837,7 @@ void baidu_speak(String voice_txt)
     
     if ( cloudSpeechClient->getVoice(voice_txt) == "success")
     {
-      //delay(200);
+      delay(200);
       Serial.println("playwav ...");
       //播放声音文件
       playwav(String(cloudSpeechClient->textfile));

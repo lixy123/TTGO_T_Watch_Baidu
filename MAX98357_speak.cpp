@@ -51,13 +51,12 @@ void playwav(String playfn)
   if ( playfn.endsWith(".mp3"))
   {
     mp3_player->begin(id3, out);
-    Serial.println("play start " + playfn);
+    Serial.println("play mp3 start:" + playfn);
     while (true)
     {
       if (mp3_player->isRunning()) {
         if (!mp3_player->loop())
         {          
-          //delay(500);  //尝试解决mp3播放不全的问题
           mp3_player->stop();
         }
       }
@@ -70,9 +69,9 @@ void playwav(String playfn)
 
   else if ( playfn.endsWith(".wav"))
   {
-    Serial.println("wav_player->begin ");
+    
     wav_player->begin(id3, out);
-    Serial.println("play start " + playfn);
+    Serial.println("play wav start:" + playfn);
     while (true)
     {
       if (wav_player->isRunning()) {
