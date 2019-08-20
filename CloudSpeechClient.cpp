@@ -743,7 +743,9 @@ String CloudSpeechClient::getVoiceText()
 
 bool CloudSpeechClient::savemp3(uint32_t file_size)
 {
+  uint32_t allsize=file_size;
   uint32_t writenum = 0;
+  uint32_t starttime, stoptime;
   if (SPIFFS.exists(textfile))
   {
     SPIFFS.remove(textfile);
@@ -751,7 +753,7 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
     Serial.println(String(textfile) + " remove");
 #endif
   }
-
+  bool retbol = true;
   File  file = SPIFFS.open(textfile, FILE_WRITE);
   if (!file)
   {
@@ -761,30 +763,54 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
     return false;
   }
 
+  #ifdef SHOW_DEBUG
+    Serial.println("mp3 下载开始");
+#endif
+  starttime = millis() / 1000;
   //返回内容小时一般不会出错，数据一多就要控制好！
-  //available 不能保证数据完全下载，要防止下载过快导致丢失数据
+  //available 不能保证数据完全下载，用file_size计数下载的字节，直到下载完成
   while (file_size > 0)
   {
+    stoptime = millis() / 1000;
+    if (stoptime - starttime >= 5)
+    {
+#ifdef SHOW_DEBUG
+      Serial.println("savemp3 time out >5s");
+#endif
+      retbol = false;
+      break;
+    }
+
     while (client.available())
     {
       int readnum = client.read(buff, 1024);
+      Serial.print(".");
       file.write(buff, readnum);
       writenum = writenum + readnum;
       file_size = file_size - readnum;
+      starttime = millis() / 1000;
     }
     //delay(500);
-    //Serial.println(">");
+    Serial.print(">");
   }
+
+#ifdef SHOW_DEBUG
+  Serial.println("mp3 下载完成");
+#endif
+
   file.close();
 #ifdef SHOW_DEBUG
-  Serial.println("save wav success FileSize=" + String(writenum));
+  if (retbol)
+    Serial.println("save wav success FileSize=" + String(writenum));
+  else
+    Serial.println("save wav fail FileSize=" + String(allsize) +", actual downloadSize="+ String(writenum));
 #endif
-  return (true);
+  return (retbol);
 }
 
 /*
-bool CloudSpeechClient::savejpg(long file_size)
-{
+  bool CloudSpeechClient::savejpg(long file_size)
+  {
 
   long writenum = 0;
   if (SPIFFS.exists(jpgfile))
@@ -811,33 +837,33 @@ bool CloudSpeechClient::savejpg(long file_size)
 
   file.close();
 
-#ifdef SHOW_DEBUG
+  #ifdef SHOW_DEBUG
   Serial.println("savejpg success FileSize=" + String(writenum));
-#endif
+  #endif
   return (true);
-}
+  }
 
-//文字转图片（返回240*120 256色黑白jpg)
-String CloudSpeechClient::get_jpg(String host, int port, String url)
-{
+  //文字转图片（返回240*120 256色黑白jpg)
+  String CloudSpeechClient::get_jpg(String host, int port, String url)
+  {
   if (baidu_Token.length() == 0)
     return ("");
 
   if (!client.connect(host.c_str(), port)) {
-#ifdef SHOW_DEBUG
+  #ifdef SHOW_DEBUG
     Serial.println("get_jpg connection failed");
-#endif
+  #endif
    return ("get_jpg connection failed");
   }
- 
-  
+
+
   String  HttpHeader = String("GET ") + url + " HTTP/1.1\r\n" +
                        "Host: " + host + ":" + String(port) + "\r\n" +
                        "Connection: keep-alive\r\n\r\n" ;
-                       
-#ifdef SHOW_DEBUG
+
+  #ifdef SHOW_DEBUG
   Serial.println(HttpHeader);
-#endif
+  #endif
   //Serial.println(body);
   client.print(HttpHeader);
 
@@ -852,14 +878,14 @@ String CloudSpeechClient::get_jpg(String host, int port, String url)
   uint32_t starttime = 0;
   uint32_t stoptime = 0;
   starttime = millis() / 1000;
- while (!client.available())
+  while (!client.available())
   {
     stoptime = millis() / 1000;
     if (stoptime - starttime >= 10)
     {
-#ifdef SHOW_DEBUG
+  #ifdef SHOW_DEBUG
       Serial.println("get_jpg timeout >10s");
-#endif
+  #endif
       return "";
     }
   }
@@ -907,7 +933,7 @@ String CloudSpeechClient::get_jpg(String host, int port, String url)
   delay(10);
   client.stop();
   return ("succ");
-}
+  }
 */
 
 //文字转语音
@@ -924,11 +950,12 @@ String CloudSpeechClient::getVoice(String audio_text)
   //Serial.println(audio_text);
   //以下信息通过 Fiddler 工具分析协议，Raw部分获得
   String url = "http://tsn.baidu.com/text2audio";
-  //示例
+  //示例:
   //tex=%E4%BD%A0%E5%A5%BD%E5%8C%97%E4%BA%AC%E9%82%AE%E7%94%B5%E5%A4%A7%E5%AD%A6%21&lan=zh&tok=24.5ba107afc08c6833511d17ceac4ff424.2592000.1548770176.282335-9406754&ctp=1&cuid=test_python";
-  //# 3为 mp3  4为pcm-16k；5为pcm-8k；6为wav 16k16位带文件头 pcm不带wav头  >>经测试，4，5音效不好
+  //# aue:
+  //   3 mp3  4pcm-16k；5pcm-8k；6为wav 16k16位带文件头 pcm不带wav头  >>经测试，4，5音效不好
   // mp3的声音最后一字播放有问题！
-  String body = "tex=" + audio_text + "&lan=zh&tok=" + baidu_Token + "&ctp=1&aue=6&cuid=test_python";
+  String body = "tex=" + audio_text + "&lan=zh&tok=" + baidu_Token + "&ctp=1&aue=3&cuid=test_python1";
 
   String  HttpHeader = "POST " + String(url) + " HTTP/1.1\r\n" +
                        "Host: tsn.baidu.com\r\n" +
@@ -941,7 +968,7 @@ String CloudSpeechClient::getVoice(String audio_text)
   //Serial.println(body);
   client.print(HttpHeader);
   client.print(body);
-  String retstr = "";
+  String retstr = "success";
   String line = "";
   bool audio_ok = false;
   bool http_ok = false;
@@ -951,24 +978,28 @@ String CloudSpeechClient::getVoice(String audio_text)
   String tmpstr = "";
   uint32_t starttime = 0;
   uint32_t stoptime = 0;
+
   starttime = millis() / 1000;
   while (!client.available())
   {
     stoptime = millis() / 1000;
-    if (stoptime - starttime >= 5)
+    if (stoptime - starttime >= 10)
     {
-      Serial.println("timeout >5s");
-      return ("timeout >5s");
+      Serial.println("timeout >10s");
+      retstr="timeout";
+      return ("timeout >10s");
     }
   }
   while (client.available())
   {
-
     if (head_ok == true)
     {
       Serial.println("head_ok ...");
       if (http_ok && audio_ok && filesize > 0)
-        savemp3(filesize);
+      {
+        if  (savemp3(filesize)==false)
+           retstr="savemp3 fail";
+      }
       break;
     }
     line = client.readStringUntil('\n');
@@ -1011,7 +1042,7 @@ String CloudSpeechClient::getVoice(String audio_text)
   }
   delay(10);
   client.stop();
-  return ("success");
+  return (retstr);
 }
 
 //有些路由器对自建服务器会支持不好，原因不明

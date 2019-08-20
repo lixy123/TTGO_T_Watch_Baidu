@@ -1,3 +1,4 @@
+#include "board_def.h"
 #include "lv_driver.h"
 #include "lv_main.h"
 
@@ -12,10 +13,12 @@
 #include <WiFiClient.h>
 #include <WiFiAP.h>  //必须加上,否则AP模式 配置参数会有问题
 
+#include "axp20x.h"
 
 #include "MAX98357_speak.h"
 
-
+AXP20X_Class *power = nullptr;
+I2CBus *i2c = nullptr;
 
 String last_voice = "";
 const IPAddress apIP(192, 168, 4, 1);
@@ -25,7 +28,7 @@ String ssidList1;
 
 bool SPIFFS_ok = false;
 
-long ShowTft_lasttime = 0;
+uint32_t ShowTft_lasttime = 0;
 int ShowTft_length = 60; //60秒内关闭TFT
 bool Tft_on = false; //tft是否显示中
 
@@ -71,8 +74,10 @@ Preferences preferences;
 //         每段录音最长20秒,平均一段录音的文字识别时间3-25秒，取决于网络速度
 //硬件：    TTGO_T_Watch 主板自带有8M PSRAM, 扩展板有多种，有一种扩展板带INMP441 I2S 麦克风录入芯片, 极适合处理语音,就用此扩展板做开发用.
 //         源码硬件资料: https://github.com/LilyGO/TTGO-T-Watch
-//         介绍指南:          https://t-watch-document-en.readthedocs.io/en/latest/index.html
-//         玩家对其介绍:   https://www.instructables.com/id/TTGO-T-Watch/
+//                     https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library
+//                     https://github.com/Xinyuan-LilyGO/twatch-series-modules
+//         介绍指南:    https://t-watch-document-en.readthedocs.io/en/latest/index.html
+//         玩家介绍:    https://www.instructables.com/id/TTGO-T-Watch/
 // INMP441与ESP32接线定义见I2S.h (TTGO_T_Watch)
 // SCK IO15
 // WS  IO13
@@ -139,14 +144,14 @@ hw_timer_t *timer = NULL;
 const char* ntpServer = "ntp1.aliyun.com";
 const long  gmtOffset_sec = 3600 * 8;
 const int   daylightOffset_sec = 0;
-long  last_check = 0;
+uint32_t  last_check = 0;
 
 const int record_time = 10;  // 录音秒数
 const int waveDataSize = record_time * 32000 ;
 const int numCommunicationData = 8000;
 //数组：8000字节缓冲区
 char communicationData[numCommunicationData];   //1char=8bits 1byte=8bits 1int=8*2 1long=8*4
-long writenum = 0;
+uint32_t writenum = 0;
 
 struct tm timeinfo;
 
@@ -288,9 +293,6 @@ bool readparams()
 void printparams()
 {
   // return;
-
-
-
   Serial.println(" report_address: " + report_address);
   Serial.println(" report_url: " + report_url);
   Serial.println(" baidu_key: " + baidu_key);
@@ -316,19 +318,12 @@ void printparams()
 
   Serial.println(" wifi_ssid1: " + wifi_ssid1);
   Serial.println(" wifi_password1: " + wifi_password1);
-
   Serial.println(" tulin_key: " + tulin_key);
-
-
-
 }
-
-
 
 void IRAM_ATTR resetModule() {
   ets_printf("reboot\n");
   //esp_restart_noos(); 旧api
-
   esp_restart();
 }
 
@@ -343,7 +338,6 @@ String GetLocalTime()
             String(timeinfo.tm_hour) + ":" + String(timeinfo.tm_min) + ":" + String(timeinfo.tm_sec) ;
   return (timestr);
 }
-
 
 
 int16_t max_int(int16_t a, int16_t b)
@@ -385,7 +379,6 @@ bool wait_loud()
       backlight_adjust(0);
       Tft_on = false;
     }
-
 
     j = j + 1;
     //每25秒处理一次即可
@@ -667,6 +660,18 @@ void setup() {
   }
   Serial.println("SPIFFS init ok");
   SPIFFS_ok = true;
+
+
+  Wire1.begin(I2C_SDA, I2C_SCL);
+  i2c = new I2CBus();
+  power = new AXP20X_Class(*i2c);
+  power->begin();
+  //打开i2s MAX98357 电源(必须)
+  power->setLDO3Mode(1);
+  power->setPowerOutPut(AXP202_LDO3, true);
+
+  init_speaker_i2s();
+
   display_init();
   lv_create_ttgo();
 
@@ -697,6 +702,7 @@ void setup() {
     setupMode();
     return;
   }
+
 
 
   //I2S_BITS_PER_SAMPLE_8BIT 配置的话，下句会报错，
@@ -738,7 +744,7 @@ void setup() {
 //非图灵对话显示位置是TFT上半截，清屏
 void ShowTft(String rec_text, bool is_tulin)
 {
-
+  lv_task_handler();
   Serial.println("ShowTft:" + rec_text);
 
   if (is_tulin)
@@ -756,7 +762,7 @@ void ShowTft(String rec_text, bool is_tulin)
   backlight_adjust(180);
   ShowTft_lasttime = millis() / 1000;
   Tft_on = true;
-
+  lv_task_handler();
   //测试用：文字转图片存入SPIFFS
   /*
     if (is_tulin == false)
@@ -818,33 +824,26 @@ void begin_recordsound()
   }
 }
 
+
+
+
 //输入：文字
 //处理：百度服务文字转语音，并播放
 void baidu_speak(String voice_txt)
 {
-
   Serial.println("baidu_speak:" + voice_txt + " len=" + String(voice_txt.length()) );
   //控制字数，防止生成wav过大: 50字以内, 1个汉字占3字节长度
   if (voice_txt.length() > 0 && voice_txt.length() < 160)
   {
-    long starttime = millis() / 1000;
+    uint32_t starttime = millis() / 1000;
     Serial.println("wav download ...");
+    
     if ( cloudSpeechClient->getVoice(voice_txt) == "success")
     {
-      delay(1000);
+      //delay(200);
       Serial.println("playwav ...");
-      delay(1000);
-
-      //初始化: MAX98357 I2S
-      init_speak_i2s();
-
       //播放声音文件
       playwav(String(cloudSpeechClient->textfile));
-
-
-      //还原I2S录音模式
-      I2S_Init(I2S_MODE_RX, 16000, I2S_BITS_PER_SAMPLE_16BIT);
-
     }
 
 #ifdef SHOW_DEBUG
@@ -917,6 +916,7 @@ void loop() {
 
   if (SPIFFS_ok == false) return;
 
+  lv_task_handler();
   //检测是否到了关闭TFT的时间
   if ( Tft_on && (millis() / 1000 - ShowTft_lasttime > ShowTft_length) )
   {

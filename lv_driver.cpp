@@ -44,9 +44,10 @@ void display_init()
   lvTicker1.attach_ms(LVGL_TICK_PERIOD, lv_tick_handler);
 
   //让gui控件起作用 此句不可缺少！！！
-  lvTicker2.attach_ms(100, [] {
-    lv_task_handler();
-  });
+  //线程不安全
+//  lvTicker2.attach_ms(100, [] {
+//    lv_task_handler();
+//  });
 
   backlight_init();
   

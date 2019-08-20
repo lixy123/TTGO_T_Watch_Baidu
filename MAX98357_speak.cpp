@@ -1,22 +1,29 @@
+
 #include "MAX98357_speak.h"
 
 AudioGeneratorMP3 *mp3_player;
 AudioGeneratorWAV *wav_player;
-AudioFileSourceSPIFFS *file;
+AudioFileSourceSPIFFS *audiofile;
 AudioOutputI2S *out;
 AudioFileSourceID3 *id3;
 
 
-void init_speak_i2s()
+void init_speaker_i2s()
 {
   Serial.println("init_speak_i2s");
-  out = new AudioOutputI2S();
+  
+  //注意：i2s麦克风占用通道0, 此处必须用通道1， 否则冲突！
+  out = new AudioOutputI2S(1);  
+  
   // bool SetPinout(int bclkPin, int wclkPin, int doutPin);
   //配置i2s引脚
-  out->SetPinout(26, 25,33);
+  out->SetPinout(TWATCH_DAC_IIS_BCK, TWATCH_DAC_IIS_WS,TWATCH_DAC_IIS_DOUT);
   //out->SetGain(0.7); //调节音量大小
   mp3_player = new AudioGeneratorMP3();
   wav_player = new AudioGeneratorWAV();
+
+  audiofile = new AudioFileSourceSPIFFS();
+  id3 = new AudioFileSourceID3(audiofile);
 }
 
 
@@ -32,28 +39,32 @@ void playwav(String playfn)
   String tmpfn ;
   tmpfn = playfn;
 
-  file = new AudioFileSourceSPIFFS( tmpfn.c_str());
-  id3 = new AudioFileSourceID3(file);
+  //file = new AudioFileSourceSPIFFS( tmpfn.c_str());
+  //id3 = new AudioFileSourceID3(file);
+  audiofile->open(tmpfn.c_str());
 
   uint32_t all_starttime;
   uint32_t all_endtime;
   all_starttime = millis() / 1000;
 
+  //mp3最后一个字播放不出来？
   if ( playfn.endsWith(".mp3"))
   {
     mp3_player->begin(id3, out);
-
     Serial.println("play start " + playfn);
-    //delay(100);
     while (true)
     {
       if (mp3_player->isRunning()) {
         if (!mp3_player->loop())
+        {          
+          //delay(500);  //尝试解决mp3播放不全的问题
           mp3_player->stop();
+        }
       }
       else
         break;
     }
+
     Serial.println("end playmusic mp3");
   }
 
@@ -61,7 +72,6 @@ void playwav(String playfn)
   {
     Serial.println("wav_player->begin ");
     wav_player->begin(id3, out);
-    //delay(100);
     Serial.println("play start " + playfn);
     while (true)
     {
@@ -78,5 +88,6 @@ void playwav(String playfn)
   else
     Serial.println("file can not play!");
   all_endtime = millis() / 1000;
+  audiofile->close();
   Serial.println("play time=" + String(all_endtime - all_starttime) + "秒");
 }
