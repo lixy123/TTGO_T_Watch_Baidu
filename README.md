@@ -13,7 +13,8 @@
 
 三.效果演示 <br/>
 
-esp32处理声音文件上传下载有一定概率失败，毕竟是廉价wifi芯片，可能在设计上有折衷。可考虑代码在发现失败后再试一次。
+毕竟esp32是廉价wifi芯片，处理声音文件上传下载速度较慢，且有一定概率失败. 对比发现，在树莓派上进行百度语音与文字互相转换时几乎从不出错。
+
 
 <p>
 <img src= 'https://raw.githubusercontent.com/lixy123/TTGO_T_Watch_Baidu/master/t-watch.jpg' />
