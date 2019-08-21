@@ -13,3 +13,10 @@
 二.软件说明 <br/>
       &nbsp;&nbsp;&nbsp;&nbsp;上一版本 https://github.com/lixy123/TTGO_T_Watch_Baidu_Rec
       没有声音输出功能， 这版本增加了声音输出.
+
+三.效果演示
+<img src= 'https://raw.githubusercontent.com/lixy123/TTGO_T_Watch_Baidu/master/t-watch.jpg' />
+
+
+演示视频地址
+   https://github.com/lixy123/TTGO_T_Watch_Baidu/raw/master/VID_20190821.avi
