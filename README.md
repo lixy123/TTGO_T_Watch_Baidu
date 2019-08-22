@@ -11,7 +11,15 @@
 &nbsp;&nbsp;&nbsp;&nbsp;上一版本 https://github.com/lixy123/TTGO_T_Watch_Baidu_Rec
 没有声音输出功能， 这版本增加了声音输出.
 
-三.效果演示 <br/>
+三.硬件要求<br/>
+&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;TTGO_T_Watch: 主板芯片为ESP32<br/>
+&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;带语音处理硬件的扩展板: 集成了INMP441 I2S 麦克风, MAX98357 I2S DAC<br/>
+
+     源码硬件资料: https:github.com/LilyGO/TTGO-T-Watch         
+     介绍指南:    https:t-watch-document-en.readthedocs.io/en/latest/index.html         
+     玩家介绍:   https:www.instructables.com/id/TTGO-T-Watch/
+
+四.效果演示 <br/>
 
 毕竟esp32是廉价wifi芯片，处理声音文件上传下载速度较慢，且有一定概率失败，不能保证稳定性，不太适合做商业产品的语音应用. 实际测试,语音转文字有2-3%概率网络中断出错，文字转声音有2-5%的概率网络中断出错. 相同网络条件下对比测试，在树莓派上进行百度语音与文字互相转换时几乎从不出错，且速度大部分情况下比esp32快。
 
