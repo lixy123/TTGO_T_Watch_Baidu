@@ -40,23 +40,23 @@ void display_init()
   disp_drv.disp_flush = ex_disp_flush; /*Used in buffered mode (LV_VDB_SIZE != 0  in lv_conf.h)*/
   lv_disp_drv_register(&disp_drv);
 
-   //让gui控件起作用 此句不可缺少！！！
-  lvTicker1.attach_ms(LVGL_TICK_PERIOD, lv_tick_handler);
+  //线程不安全,放在loop()处理
+  //让gui控件起作用 此句不可缺少！！！
+  // lvTicker1.attach_ms(LVGL_TICK_PERIOD, lv_tick_handler);
 
   //让gui控件起作用 此句不可缺少！！！
-  //线程不安全
-//  lvTicker2.attach_ms(100, [] {
-//    lv_task_handler();
-//  });
+  //  lvTicker2.attach_ms(100, [] {
+  //    lv_task_handler();
+  //  });
 
   backlight_init();
-  
+
   int level = backlight_getLevel();
   for (int level = 0; level < 255; level += 25) {
     backlight_adjust(level);
     delay(100);
   }
-  
+
   //tft.fillScreen(TFT_BLACK);
   //tft.fillScreen(TFT_RED);
   //tft.fillScreen(TFT_GREEN);

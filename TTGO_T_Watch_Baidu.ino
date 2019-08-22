@@ -63,9 +63,11 @@ String skip_baidu; //短声音跳过识别
 String loopsleep;  //每次调用百度文字识别后的休息时间,防止过度频繁调用百度服务
 
 String wifi_ssid1 ;
-String  wifi_password1  ;
+String wifi_password1  ;
 
-
+String out_voice;  //0 扬声器不发声 1 wav 2 mp3
+String out_berry_text; // 0 文字不上传 1上传
+String out_berry_wav; // 0 wav不上传 1上传
 
 WebServer webServer(80);
 Preferences preferences;
@@ -196,6 +198,10 @@ void writeparams()
   preferences.putString("wifi_password1", wifi_password1);
   preferences.putString("tulin_key", tulin_key);
 
+  preferences.putString(" out_voice",  out_voice);
+  preferences.putString("out_berry_text", out_berry_text);
+  preferences.putString("out_berry_wav", out_berry_wav);
+
   Serial.println("Writing params done!");
 }
 
@@ -239,6 +245,11 @@ bool readparams()
     wifi_password1 = "9999900000";
 
 
+
+    out_voice = "1";
+    out_berry_text = "0";
+    out_berry_wav = "0";
+
     tulin_key = "";  //图灵key
     writeparams();
     printparams();
@@ -273,18 +284,25 @@ bool readparams()
     skip_baidu = "2";
 
   loopsleep = preferences.getString("loopsleep");
-  //升级
-  if (loopsleep == "")
-  {
-    loopsleep = "5";
-    //preferences.putString("loopsleep", loopsleep);
-  }
 
   machine_id = preferences.getString("machine_id");
   wifi_ssid1 = preferences.getString("wifi_ssid1");
   wifi_password1 = preferences.getString("wifi_password1");
 
   tulin_key = preferences.getString("tulin_key");
+
+  out_voice =  preferences.getString("out_voice");
+  out_berry_text = preferences.getString("out_berry_text");
+  out_berry_wav = preferences.getString("out_berry_wav");
+
+  if ( out_voice == "")
+    out_voice = "1";
+
+  if (out_berry_text == "")
+    out_berry_text = "0";
+
+  if ( out_berry_wav == "")
+    out_berry_wav = "0";
 
   printparams();
   return true;
@@ -319,6 +337,10 @@ void printparams()
   Serial.println(" wifi_ssid1: " + wifi_ssid1);
   Serial.println(" wifi_password1: " + wifi_password1);
   Serial.println(" tulin_key: " + tulin_key);
+
+  Serial.println(" out_voice: " + out_voice);
+  Serial.println(" out_berry_text: " + out_berry_text);
+  Serial.println(" out_berry_wav: " + out_berry_wav);
 }
 
 void IRAM_ATTR resetModule() {
@@ -416,7 +438,6 @@ bool wait_loud()
       //Serial.println(String(val1) + " " + String(val2) + " " + String(val16) + " " + String(tmpval));
       communicationData[loop1 * 2] =  (byte)(tmpval & 0xFF);
       communicationData[loop1 * 2 + 1] = (byte)((tmpval >> 8) & 0xFF);
-
     }
 
     //填充声音信息到缓存区 (配置:2秒或n秒)
@@ -625,8 +646,6 @@ bool connectwifi(int flag)
 
 void setup() {
 
-
-
   Serial.begin(115200);
   Serial.println("setup begin");
   SPIFFS_ok = false;
@@ -677,6 +696,12 @@ void setup() {
 
   //初始化配置类
   preferences.begin("wifi-config");
+
+
+  //preferences.putString("out_voice", "1");
+  // preferences.putString("out_berry_text", "1");
+  //  preferences.putString("out_berry_wav", "1");
+
   readparams();
 
   //report_address = "";
@@ -721,10 +746,15 @@ void setup() {
 
   cloudSpeechClient->tulin_key = tulin_key;
 
+  if (out_voice == "1")
+    cloudSpeechClient->textfile = "/text.wav";
+  if (out_voice == "2")
+    cloudSpeechClient->textfile = "/text.mp3";
+
   //NTP 时间
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
-  if (String(report_url).length() > 0 && String(report_address).length() > 0)
+  if (String(out_berry_text) == "1"  && String(report_url).length() > 0 && String(report_address).length() > 0 )
     cloudSpeechClient->posturl(report_address, 1990, report_url  + machine_id +   urlencode("启动") );
 
   ShowTft_lasttime = millis() / 1000;
@@ -744,7 +774,7 @@ void setup() {
 //非图灵对话显示位置是TFT上半截，清屏
 void ShowTft(String rec_text, bool is_tulin)
 {
-  lv_task_handler();
+  //lv_task_handler();
   Serial.println("ShowTft:" + rec_text);
 
   if (is_tulin)
@@ -763,6 +793,7 @@ void ShowTft(String rec_text, bool is_tulin)
   ShowTft_lasttime = millis() / 1000;
   Tft_on = true;
   lv_task_handler();
+  lv_tick_inc(20);
   //测试用：文字转图片存入SPIFFS
   /*
     if (is_tulin == false)
@@ -834,14 +865,30 @@ void baidu_speak(String voice_txt)
   {
     uint32_t starttime = millis() / 1000;
     Serial.println("wav download ...");
-    
-    if ( cloudSpeechClient->getVoice(voice_txt) == "success")
+
+    int trynum = 3;
+    //尝试3次下载，下载有一次机率失败
+    bool down_ok = false;
+    while (trynum > 0)
     {
-      delay(200);
+      Serial.println("下载声音文件:" + String(cloudSpeechClient->textfile));
+      if ( cloudSpeechClient->getVoice(voice_txt) == "success")
+      {
+        down_ok = true;
+        break;
+      }
+      trynum = trynum - 1;
+      delay(1000);
+    }
+
+    if ( down_ok)
+    {
+      //delay(200);
       Serial.println("playwav ...");
       //播放声音文件
       playwav(String(cloudSpeechClient->textfile));
     }
+
 
 #ifdef SHOW_DEBUG
     Serial.println("baidu_speak:" + String( millis() / 1000 - starttime) + "秒");
@@ -882,24 +929,20 @@ void record_succ(String VoiceText)
     }
 
     //播放图灵对话内容
-
-    //初始化: MAX98357 I2S
-    //init_speak_i2s();
     //下载wav并播放
     baidu_speak(tulin_txt);
-
-    //还原I2S录音模式
-    //I2S_Init(I2S_MODE_RX, 16000, I2S_BITS_PER_SAMPLE_16BIT);
-
   }
 
   //3.文字,声音传给树莓派
-  if (String(report_url).length() > 0 && String(report_address).length() > 0 )
+  if (String(out_berry_text) == "1" && String(report_url).length() > 0 && String(report_address).length() > 0 )
   {
     cloudSpeechClient->posturl(report_address, 1990, report_url + machine_id +    urlencode(VoiceText) );
+  }
 
+  //4.wav文件备份到树莓派(可做录音机?)
+  if (String(out_berry_wav) == "1" && String(report_url).length() > 0 && String(report_address).length() > 0 )
+  {
     //平均上传时间<1秒
-    //4.wav文件备份到树莓派(可做录音机?)
     Serial.println("wav upload...");
     bool ret = cloudSpeechClient->uploadfile(report_address, 9999, String(cloudSpeechClient->recordfile) + "_bak" + machine_id + ".wav");
     if (ret == true)
@@ -907,6 +950,7 @@ void record_succ(String VoiceText)
     else
       Serial.println("wav upload fail");
   }
+
 }
 
 void loop() {
@@ -914,6 +958,7 @@ void loop() {
   if (SPIFFS_ok == false) return;
 
   lv_task_handler();
+  lv_tick_inc(20);
   //检测是否到了关闭TFT的时间
   if ( Tft_on && (millis() / 1000 - ShowTft_lasttime > ShowTft_length) )
   {
@@ -1078,6 +1123,34 @@ void startWebServer() {
       s += "skip_baidu: <select name=\"skip_baidu\" ><option  value=\"1\">yes</option> <option  value=\"0\" selected>no</option>  </select>";
     s += "loopsleep:<input name=\"loopsleep\" style=\"width:100px\" value='" + loopsleep + "'type=\"text\">";
 
+    //扬声器发声
+    if (out_voice == "")
+      s += "out_voice: <select name=\"out_voice\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">.wav</option>  <option  value=\"2\">.mp3</option> </select>";
+    else if (out_voice == "0")
+      s += "out_voice: <select name=\"out_voice\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">.wav</option>  <option  value=\"2\">.mp3</option> </select>";
+    else  if (out_voice == "1")
+      s += "out_voice: <select name=\"out_voice\" ><option  value=\"0\">no</option> <option  value=\"1\" selected>.wav</option>   <option  value=\"2\">.mp3</option> </select>";
+    else
+      s += "out_voice: <select name=\"out_voice\" ><option  value=\"0\">no</option> <option  value=\"1\">.wav</option>   <option  value=\"2\"  selected >.mp3</option> </select>";
+
+    //上报txt到树莓派
+    if (out_berry_text == "")
+      s += "out_berry_text: <select name=\"out_berry_text\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">yes</option>  </select>";
+    else if (out_berry_text == "0")
+      s += "out_berry_text: <select name=\"out_berry_text\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">yes</option>  </select>";
+    else
+      s += "out_berry_text: <select name=\"out_berry_text\" ><option  value=\"0\">no</option> <option  value=\"1\" selected>yes</option>  </select>";
+
+    //上报wav到树莓派
+    if (out_berry_wav == "")
+      s += "out_berry_wav: <select name=\"out_berry_wav\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">yes</option>  </select>";
+    else if (out_berry_wav == "0")
+      s += "out_berry_wav: <select name=\"out_berry_wav\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">yes</option>  </select>";
+    else
+      s += "out_berry_wav: <select name=\"out_berry_wav\" ><option  value=\"0\">no</option> <option  value=\"1\" selected>yes</option>  </select>";
+
+
+
     s += " <hr>";
     s += "<label>SSID1: </label><select style=\"width:200px\"  name=\"wifi_ssid1\" >" + ssidList1 +  "</select>";
     s += "Password1: <input name=\"wifi_password1\" style=\"width:100px\"  value='" + wifi_password1 + "' type=\"text\">";
@@ -1122,6 +1195,10 @@ void startWebServer() {
     tulin_key = new_urlDecode(webServer.arg("tulin_key"));
 
 
+    out_voice = new_urlDecode(webServer.arg("out_voice"));
+
+    out_berry_text = new_urlDecode(webServer.arg("out_berry_text"));
+    out_berry_wav = new_urlDecode(webServer.arg("out_berry_wav"));
 
     Serial.print("baidu_secert: " + baidu_secert);
 

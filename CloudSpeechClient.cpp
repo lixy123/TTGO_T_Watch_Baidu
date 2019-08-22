@@ -253,6 +253,7 @@ String CloudSpeechClient::getToken(String api_key, String api_secert)
 #endif
       return "";
     }
+    delay(100);
   }
   while (client.available())
   {
@@ -679,7 +680,7 @@ String CloudSpeechClient::getVoiceText()
 #endif
       return "";
     }
-    delay(200);
+    delay(100);
   }
 
   //HTTP/1.1 500 Internal Server Error
@@ -743,16 +744,10 @@ String CloudSpeechClient::getVoiceText()
 
 bool CloudSpeechClient::savemp3(uint32_t file_size)
 {
-  uint32_t allsize=file_size;
+  uint32_t allsize = file_size;
   uint32_t writenum = 0;
   uint32_t starttime, stoptime;
-  if (SPIFFS.exists(textfile))
-  {
-    SPIFFS.remove(textfile);
-#ifdef SHOW_DEBUG
-    Serial.println(String(textfile) + " remove");
-#endif
-  }
+
   bool retbol = true;
   File  file = SPIFFS.open(textfile, FILE_WRITE);
   if (!file)
@@ -763,8 +758,8 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
     return false;
   }
 
-  #ifdef SHOW_DEBUG
-    Serial.println("声音文件下载开始：" +String(textfile));
+#ifdef SHOW_DEBUG
+  Serial.println("声音文件下载开始：" + String(textfile));
 #endif
   starttime = millis() / 1000;
   //返回内容小时一般不会出错，数据一多就要控制好！
@@ -772,10 +767,10 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
   while (file_size > 0)
   {
     stoptime = millis() / 1000;
-    if (stoptime - starttime >= 5)
+    if (stoptime - starttime > 3)
     {
 #ifdef SHOW_DEBUG
-      Serial.println("savefile time out >5s");
+      Serial.println("savefile time out >3s");
 #endif
       retbol = false;
       break;
@@ -784,18 +779,18 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
     while (client.available())
     {
       int readnum = client.read(buff, 1024);
-      Serial.print(".");
+      //Serial.print(".");
       file.write(buff, readnum);
       writenum = writenum + readnum;
       file_size = file_size - readnum;
       starttime = millis() / 1000;
     }
     //delay(500);
-    Serial.print(">");
+    //Serial.print(">");
   }
 
 #ifdef SHOW_DEBUG
-  Serial.println("声音文件下载完成："+String(textfile));
+  Serial.println("声音文件下载完成：" + String(textfile));
 #endif
 
   file.close();
@@ -803,8 +798,9 @@ bool CloudSpeechClient::savemp3(uint32_t file_size)
   if (retbol)
     Serial.println("save wav success FileSize=" + String(writenum));
   else
-    Serial.println("save wav fail FileSize=" + String(allsize) +", actual downloadSize="+ String(writenum));
+    Serial.println("save wav fail FileSize=" + String(allsize) + ", actual downloadSize=" + String(writenum));
 #endif
+
   return (retbol);
 }
 
@@ -942,6 +938,22 @@ String CloudSpeechClient::getVoice(String audio_text)
   if (baidu_Token.length() == 0)
     return ("no Token");
 
+#ifdef SHOW_DEBUG
+    Serial.println("检查是否删除临时文件:" + String(textfile) + " remove");
+#endif
+
+  if (SPIFFS.exists(textfile))
+  {
+    SPIFFS.remove(textfile);
+#ifdef SHOW_DEBUG
+    Serial.println(String(textfile) + " remove");
+#endif
+  }
+
+#ifdef SHOW_DEBUG
+    Serial.println("connect tsn.baidu.com");
+#endif
+
   if (!client.connect("tsn.baidu.com", 80)) {
     Serial.println("connection failed");
     return ("connection failed");
@@ -955,7 +967,11 @@ String CloudSpeechClient::getVoice(String audio_text)
   //aue参数:
   //   3 mp3  4pcm-16k；5pcm-8k；6为wav 16k16位带文件头 pcm不带wav头  >>经测试，4，5音效不好
   // mp3的声音最后一字播放有问题！
-  String body = "tex=" + audio_text + "&lan=zh&tok=" + baidu_Token + "&ctp=1&aue=6&cuid=test_python1";
+  String body;
+  if  (textfile.endsWith(".wav"))
+    body = "tex=" + audio_text + "&lan=zh&tok=" + baidu_Token + "&ctp=1&aue=6&cuid=test_python2";
+  else
+    body = "tex=" + audio_text + "&lan=zh&tok=" + baidu_Token + "&ctp=1&aue=3&cuid=test_python2";
 
   String  HttpHeader = "POST " + String(url) + " HTTP/1.1\r\n" +
                        "Host: tsn.baidu.com\r\n" +
@@ -986,19 +1002,20 @@ String CloudSpeechClient::getVoice(String audio_text)
     if (stoptime - starttime >= 10)
     {
       Serial.println("timeout >10s");
-      retstr="timeout";
+      retstr = "timeout";
       return ("timeout >10s");
     }
+    delay(100);
   }
   while (client.available())
   {
     if (head_ok == true)
     {
-      Serial.println("head_ok ...");
+      //Serial.println("head_ok ...");
       if (http_ok && audio_ok && filesize > 0)
       {
-        if  (savemp3(filesize)==false)
-           retstr="savemp3 fail";
+        if  (savemp3(filesize) == false)
+          retstr = "savemp3 fail";
       }
       break;
     }
@@ -1007,12 +1024,6 @@ String CloudSpeechClient::getVoice(String audio_text)
     if (line.startsWith("HTTP/1.1 200 OK"))
     {
       http_ok = true;
-#ifdef SHOW_DEBUG
-      Serial.println(">HTTP/1.1 200 OK");
-#endif
-      //line不含'\n'
-      //Serial.println(String("HTTP/1.1 200 OK").length());
-      // Serial.println(line.length());
     }
     if (line.startsWith("Content-Length: "))
     {
@@ -1025,20 +1036,11 @@ String CloudSpeechClient::getVoice(String audio_text)
     if (line.startsWith("Content-Type: audio"))
     {
       audio_ok = true;
-#ifdef SHOW_DEBUG
-      Serial.println(">Content-Type: audio");
-#endif
     }
     if (line.length() == 1 && line.startsWith("\r"))
     {
       head_ok = true;
-#ifdef SHOW_DEBUG
-      Serial.println(">end");
-#endif
     }
-#ifdef SHOW_DEBUG
-    Serial.println(line);
-#endif
   }
   delay(10);
   client.stop();

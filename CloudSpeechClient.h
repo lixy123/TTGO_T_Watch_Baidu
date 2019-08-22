@@ -24,12 +24,13 @@ class CloudSpeechClient {
     String Find_tulintext(String line);
   public:
     uint8_t buff[1024];
+
     uint8_t buff_base64[2048];
     CloudSpeechClient(int sec);
     ~CloudSpeechClient();
 
-    char *   textfile = "/text.wav";
-    const char *   recordfile = "record";
+    String textfile = "/text.wav";  //百度文字转声音的临时存储文件
+    const char * recordfile = "record";
 
     const int headerSize = 44;
     //这个psram版本就是提前分配了一个内存区,专用于存放声音数据,调用百度声音识别时不需要借助于SD卡做为交换.

@@ -18,7 +18,7 @@ void init_speaker_i2s()
   // bool SetPinout(int bclkPin, int wclkPin, int doutPin);
   //配置i2s引脚
   out->SetPinout(TWATCH_DAC_IIS_BCK, TWATCH_DAC_IIS_WS,TWATCH_DAC_IIS_DOUT);
-  //out->SetGain(0.7); //调节音量大小
+  out->SetGain(0.2); //调节音量大小 外接无源扬声器声音也很响亮
   mp3_player = new AudioGeneratorMP3();
   wav_player = new AudioGeneratorWAV();
 
