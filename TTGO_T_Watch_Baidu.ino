@@ -68,6 +68,7 @@ String wifi_password1  ;
 String out_voice;  //0 扬声器不发声 1 wav 2 mp3
 String out_berry_text; // 0 文字不上传 1上传
 String out_berry_wav; // 0 wav不上传 1上传
+String showlcd;  // 0 不要显示 1要显示
 
 WebServer webServer(80);
 Preferences preferences;
@@ -201,7 +202,7 @@ void writeparams()
   preferences.putString(" out_voice",  out_voice);
   preferences.putString("out_berry_text", out_berry_text);
   preferences.putString("out_berry_wav", out_berry_wav);
-
+  preferences.putString("showlcd", showlcd);
   Serial.println("Writing params done!");
 }
 
@@ -240,7 +241,7 @@ bool readparams()
 
     pre_sound = "2";
     skip_baidu = "1";
-    loopsleep = "5";
+    loopsleep = "3";
     wifi_ssid1 = "CMCC-r3Ff";
     wifi_password1 = "9999900000";
 
@@ -249,6 +250,7 @@ bool readparams()
     out_voice = "1";
     out_berry_text = "0";
     out_berry_wav = "0";
+    showlcd = "1";
 
     tulin_key = "";  //图灵key
     writeparams();
@@ -256,15 +258,11 @@ bool readparams()
     return false;
   }
 
-
   report_address = preferences.getString("report_address");
   report_url =  preferences.getString("report_url");
   baidu_key = preferences.getString("baidu_key");
   baidu_secert = preferences.getString("baidu_secert");
   dog_delay = preferences.getString("dog_delay");
-  if (dog_delay == "")
-    dog_delay = "10";
-
   volume_low = preferences.getString("volume_low");
   volume_high = preferences.getString("volume_high");
   volume_double = preferences.getString("volume_double");
@@ -276,13 +274,7 @@ bool readparams()
   define_zero2 = preferences.getString("define_zero2");
 
   pre_sound = preferences.getString("pre_sound");
-  if (pre_sound == "")
-    pre_sound = "2";
-
   skip_baidu = preferences.getString("skip_baidu");
-  if (skip_baidu == "")
-    skip_baidu = "2";
-
   loopsleep = preferences.getString("loopsleep");
 
   machine_id = preferences.getString("machine_id");
@@ -294,6 +286,8 @@ bool readparams()
   out_voice =  preferences.getString("out_voice");
   out_berry_text = preferences.getString("out_berry_text");
   out_berry_wav = preferences.getString("out_berry_wav");
+  showlcd = preferences.getString("showlcd");
+
 
   if ( out_voice == "")
     out_voice = "1";
@@ -303,6 +297,10 @@ bool readparams()
 
   if ( out_berry_wav == "")
     out_berry_wav = "0";
+
+  if ( showlcd == "")
+    showlcd = "1";
+
 
   printparams();
   return true;
@@ -341,6 +339,7 @@ void printparams()
   Serial.println(" out_voice: " + out_voice);
   Serial.println(" out_berry_text: " + out_berry_text);
   Serial.println(" out_berry_wav: " + out_berry_wav);
+  Serial.println(" showlcd: " + showlcd);
 }
 
 void IRAM_ATTR resetModule() {
@@ -395,17 +394,21 @@ bool wait_loud()
   while (true)
   {
 
-    //检测是否到了关闭TFT的时间
-    if ( Tft_on && (millis() / 1000 - ShowTft_lasttime > ShowTft_length) )
+    if (showlcd == "1")
     {
-      backlight_adjust(0);
-      Tft_on = false;
+      //检测是否到了关闭TFT的时间
+      if ( Tft_on && (millis() / 1000 - ShowTft_lasttime > ShowTft_length) )
+      {
+        backlight_adjust(0);
+        Tft_on = false;
+      }
     }
 
     j = j + 1;
     //每25秒处理一次即可
     if (j % 100 == 0)
       timerWrite(timer, 0); //reset timer (feed watchdog)
+
 
     //读满缓冲区8000字节
     //此函数会自动调节时间，只要后续的操作不要让缓冲区占满即可
@@ -681,31 +684,46 @@ void setup() {
   SPIFFS_ok = true;
 
 
-  Wire1.begin(I2C_SDA, I2C_SCL);
-  i2c = new I2CBus();
-  power = new AXP20X_Class(*i2c);
-  power->begin();
-  //打开i2s MAX98357 电源(必须)
-  power->setLDO3Mode(1);
-  power->setPowerOutPut(AXP202_LDO3, true);
 
-  init_speaker_i2s();
 
-  display_init();
-  lv_create_ttgo();
 
   //初始化配置类
   preferences.begin("wifi-config");
 
 
   //preferences.putString("out_voice", "1");
-  // preferences.putString("out_berry_text", "1");
-  //  preferences.putString("out_berry_wav", "1");
+  //preferences.putString("out_berry_text", "1");
+  //preferences.putString("out_berry_wav", "1");
+  //preferences.putString("showlcd", "1");
 
   readparams();
 
   //report_address = "";
+
+  //关闭显示屏输出
+  //showlcd = "0";
+  //关闭图灵输出
   //tulin_key = "";
+  //关闭图灵文字声音输出
+  //out_voice = "0";
+
+  if (out_voice == "1" || out_voice == "2" )
+  {
+    //声音输出必须调用如下方法打开某些引脚电源
+    Wire1.begin(I2C_SDA, I2C_SCL);
+    i2c = new I2CBus();
+    power = new AXP20X_Class(*i2c);
+    power->begin();
+    //打开i2s MAX98357 电源(必须)
+    power->setLDO3Mode(1);
+    power->setPowerOutPut(AXP202_LDO3, true);
+  }
+
+  if (showlcd == "1")
+  {
+    display_init();
+    lv_create_ttgo();
+  }
 
   //如果进入配置模式，10分钟后看门狗会让esp32自动重启
   int wdtTimeout = dog_delay.toInt() * 60 * 1000; //设置分钟 watchdog
@@ -746,6 +764,9 @@ void setup() {
 
   cloudSpeechClient->tulin_key = tulin_key;
 
+  if (out_voice == "1" || out_voice == "2")
+    init_speaker_i2s();
+
   if (out_voice == "1")
     cloudSpeechClient->textfile = "/text.wav";
   if (out_voice == "2")
@@ -760,10 +781,7 @@ void setup() {
   ShowTft_lasttime = millis() / 1000;
   Tft_on = true;
 
-
-
   ShowTft("启动", false);
-
   Serial.println("start...");
 }
 
@@ -774,7 +792,10 @@ void setup() {
 //非图灵对话显示位置是TFT上半截，清屏
 void ShowTft(String rec_text, bool is_tulin)
 {
-  //lv_task_handler();
+  if (showlcd != "1") return;
+
+  lv_task_handler();
+
   Serial.println("ShowTft:" + rec_text);
 
   if (is_tulin)
@@ -793,7 +814,7 @@ void ShowTft(String rec_text, bool is_tulin)
   ShowTft_lasttime = millis() / 1000;
   Tft_on = true;
   lv_task_handler();
-  lv_tick_inc(20);
+
   //测试用：文字转图片存入SPIFFS
   /*
     if (is_tulin == false)
@@ -878,7 +899,7 @@ void baidu_speak(String voice_txt)
         break;
       }
       trynum = trynum - 1;
-      delay(1000);
+      delay(2000);
     }
 
     if ( down_ok)
@@ -929,8 +950,9 @@ void record_succ(String VoiceText)
     }
 
     //播放图灵对话内容
-    //下载wav并播放
-    baidu_speak(tulin_txt);
+    //下载wav并播放(下载声音文件时容易重启?)
+    if (out_voice == "1" || out_voice == "2")
+      baidu_speak(tulin_txt);
   }
 
   //3.文字,声音传给树莓派
@@ -957,13 +979,16 @@ void loop() {
 
   if (SPIFFS_ok == false) return;
 
-  lv_task_handler();
-  lv_tick_inc(20);
-  //检测是否到了关闭TFT的时间
-  if ( Tft_on && (millis() / 1000 - ShowTft_lasttime > ShowTft_length) )
+  if (showlcd == "1")
   {
-    backlight_adjust(0);
-    Tft_on = false;
+    lv_task_handler();
+
+    //检测是否到了关闭TFT的时间
+    if ( Tft_on && (millis() / 1000 - ShowTft_lasttime > ShowTft_length) )
+    {
+      backlight_adjust(0);
+      Tft_on = false;
+    }
   }
 
   //如果是配置模式，不录音，识音
@@ -1125,7 +1150,7 @@ void startWebServer() {
 
     //扬声器发声
     if (out_voice == "")
-      s += "out_voice: <select name=\"out_voice\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">.wav</option>  <option  value=\"2\">.mp3</option> </select>";
+      s += "out_voice: <select name=\"out_voice\" ><option  value=\"0\" >no</option> <option  value=\"1\" selected>.wav</option>  <option  value=\"2\">.mp3</option> </select>";
     else if (out_voice == "0")
       s += "out_voice: <select name=\"out_voice\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">.wav</option>  <option  value=\"2\">.mp3</option> </select>";
     else  if (out_voice == "1")
@@ -1148,6 +1173,14 @@ void startWebServer() {
       s += "out_berry_wav: <select name=\"out_berry_wav\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">yes</option>  </select>";
     else
       s += "out_berry_wav: <select name=\"out_berry_wav\" ><option  value=\"0\">no</option> <option  value=\"1\" selected>yes</option>  </select>";
+
+
+    if (showlcd == "")
+      s += "showlcd: <select name=\"showlcd\" ><option  value=\"0\" >no</option> <option  value=\"1\" selected>yes</option>  </select>";
+    else if (showlcd == "0")
+      s += "showlcd: <select name=\"showlcd\" ><option  value=\"0\" selected>no</option> <option  value=\"1\">yes</option>  </select>";
+    else
+      s += "showlcd: <select name=\"showlcd\" ><option  value=\"0\">no</option> <option  value=\"1\" selected>yes</option>  </select>";
 
 
 
@@ -1199,6 +1232,7 @@ void startWebServer() {
 
     out_berry_text = new_urlDecode(webServer.arg("out_berry_text"));
     out_berry_wav = new_urlDecode(webServer.arg("out_berry_wav"));
+    showlcd = new_urlDecode(webServer.arg("showlcd"));
 
     Serial.print("baidu_secert: " + baidu_secert);
 
