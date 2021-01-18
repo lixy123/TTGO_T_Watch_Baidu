@@ -24,8 +24,10 @@ void I2S_Init(i2s_mode_t MODE, int SAMPLE_RATE, i2s_bits_per_sample_t BPS) {
   }
   i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
   i2s_set_pin(I2S_NUM_0, &pin_config);
+
   //最终设置: 16k, 16位，单声道
-  i2s_set_clk(I2S_NUM_0, SAMPLE_RATE, BPS, I2S_CHANNEL_MONO);
+  //1.0.3 rc1 以后的版本不要调用此句，否则不输出数据
+  //i2s_set_clk(I2S_NUM_0, SAMPLE_RATE, BPS, I2S_CHANNEL_MONO);
 }
 
 int I2S_Read(char* data, int numData) {
